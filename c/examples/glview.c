@@ -14,6 +14,15 @@ see:
 #include <libusb.h>
 #include "libfreenect.h"
 
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <time.h>
+#include <string.h>
+#include <unistd.h>
+
 #include <pthread.h>
 
 #if defined(__APPLE__)
@@ -175,6 +184,10 @@ void depthimg(uint16_t *buf, int width, int height)
         int deepest_pos = 0;
         int border = 5;
 
+	struct sockaddr_in addr;
+	int fd;
+	char message[100];
+
 	pthread_mutex_lock(&gl_backbuf_mutex);
 	for (i=2000; i<640*480; i++) {
 		int pval = t_gamma[buf[i]];
@@ -254,6 +267,21 @@ void depthimg(uint16_t *buf, int width, int height)
 		}
 	}
 
+	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+                printf("Socket screwed");
+        }
+
+	memset(&addr, 0, sizeof(addr));
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = inet_addr("192.168.1.2");
+	addr.sin_port=htons(25000);
+
+	sprintf(message, "%d,%d,%d", deepest_pos%640, (deepest_pos-(deepest_pos%640))/640, deepest);
+
+	if (sendto(fd, message, strlen(message), 0, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
+		printf("Sending failed");
+	}
+
 	/*for (i = ((deepest_pos-(deepest_pos%640))/640)-10; i < ((deepest_pos-(deepest_pos%640))/640)+10; i++) {
 		gl_depth_back[3*i+0] = 0;
                 gl_depth_back[3*i+1] = 0;
@@ -278,6 +306,7 @@ void rgbimg(uint8_t *buf, int width, int height)
 int main(int argc, char **argv)
 {
 	int res;
+	int fd;
 	libusb_device_handle *dev;
 	printf("Kinect camera test\n");
 
