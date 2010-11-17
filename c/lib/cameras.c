@@ -108,7 +108,7 @@ static void depth_process(uint8_t *buf, size_t len)
 	}
 #endif
 	
-	printf("GOT DEPTH FRAME, %d bytes\n", depth_pos);
+	/*printf("GOT DEPTH FRAME, %d bytes\n", depth_pos);*/
 
 	int bitshift = 0;
 	for (i=0; i<(640*480); i++) {
@@ -158,7 +158,7 @@ static void rgb_process(uint8_t *buf, size_t len)
 	}
 #endif
 	
-	printf("GOT RGB FRAME, %d bytes\n", rgb_pos);
+	/*printf("GOT RGB FRAME, %d bytes\n", rgb_pos);*/
 
 	// horrible bayer to RGB conversion, but does the job for now
 	for (y=0; y<480; y++) {

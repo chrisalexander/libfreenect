@@ -166,11 +166,37 @@ void depthimg(uint16_t *buf, int width, int height)
 	fclose(f);*/
 
 	int i;
+	int j;
+
+
+	int prev_pval8 = 0;
+        int c = 0;
+        int deepest = 9202;
+        int deepest_pos = 0;
+        int border = 5;
 
 	pthread_mutex_lock(&gl_backbuf_mutex);
-	for (i=0; i<640*480; i++) {
+	for (i=2000; i<640*480; i++) {
 		int pval = t_gamma[buf[i]];
 		int lb = pval & 0xff;
+
+
+                int pval8 = pval>>8;
+                if (pval8 > (prev_pval8-border) && pval8 < (prev_pval8+border)) {
+                        c++;
+                        if (c > 10) {
+                                if (pval<deepest) {
+                                        deepest = pval;
+                                        deepest_pos = i;
+                                }
+                        }
+                } else {
+                        c = 0;
+                }
+                prev_pval8 = pval8;
+
+
+
 		switch (pval>>8) {
 			case 0:
 				gl_depth_back[3*i+0] = 255;
@@ -209,6 +235,31 @@ void depthimg(uint16_t *buf, int width, int height)
 				break;
 		}
 	}
+
+	printf("'%d' at position '%d' (%dx%d)\n", deepest, deepest_pos, deepest_pos%640, (deepest_pos-(deepest_pos%640))/640);
+
+	for (i = deepest_pos-25; i < deepest_pos+25; i++) {
+		for (j = 0; j < 4; j++) {
+			gl_depth_back[3*(i+((-2+j)*640))+0] = 200;
+			gl_depth_back[3*(i+((-2+j)*640))+1] = 200;
+			gl_depth_back[3*(i+((-2+j)*640))+2] = 200;
+		}
+	}
+
+	for (i = 0; i < 50; i++) {
+		for (j = deepest_pos-4; j < deepest_pos+5; j++) {
+			gl_depth_back[3*(j+((-25+i)*640))+0] = 200;
+                        gl_depth_back[3*(j+((-25+i)*640))+1] = 200;
+                        gl_depth_back[3*(j+((-25+i)*640))+2] = 200;
+		}
+	}
+
+	/*for (i = ((deepest_pos-(deepest_pos%640))/640)-10; i < ((deepest_pos-(deepest_pos%640))/640)+10; i++) {
+		gl_depth_back[3*i+0] = 0;
+                gl_depth_back[3*i+1] = 0;
+                gl_depth_back[3*i+2] = 0;
+	}*/
+
 	got_frames++;
 	pthread_cond_signal(&gl_frame_cond);
 	pthread_mutex_unlock(&gl_backbuf_mutex);
