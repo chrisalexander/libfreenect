@@ -180,7 +180,7 @@ void depthimg(uint16_t *buf, int width, int height)
 
 	int prev_pval8 = 0;
         int c = 0;
-        int deepest = 9202;
+        int deepest = 700;
         int deepest_pos = 0;
         int border = 5;
 
@@ -198,7 +198,7 @@ void depthimg(uint16_t *buf, int width, int height)
                 if (pval8 > (prev_pval8-border) && pval8 < (prev_pval8+border)) {
                         c++;
                         if (c > 10) {
-                                if (pval<deepest) {
+                                if (pval<deepest && pval > 250) {
                                         deepest = pval;
                                         deepest_pos = i;
                                 }
@@ -249,44 +249,41 @@ void depthimg(uint16_t *buf, int width, int height)
 		}
 	}
 
-	printf("'%d' at position '%d' (%dx%d)\n", deepest, deepest_pos, deepest_pos%640, (deepest_pos-(deepest_pos%640))/640);
+	if (deepest_pos > 0) {
+		printf("'%d' at position '%d' (%dx%d)\n", deepest, deepest_pos, deepest_pos%640, (deepest_pos-(deepest_pos%640))/640);
 
-	for (i = deepest_pos-25; i < deepest_pos+25; i++) {
-		for (j = 0; j < 4; j++) {
-			gl_depth_back[3*(i+((-2+j)*640))+0] = 200;
-			gl_depth_back[3*(i+((-2+j)*640))+1] = 200;
-			gl_depth_back[3*(i+((-2+j)*640))+2] = 200;
+		for (i = deepest_pos-25; i < deepest_pos+25; i++) {
+			for (j = 0; j < 4; j++) {
+				gl_depth_back[3*(i+((-2+j)*640))+0] = 200;
+				gl_depth_back[3*(i+((-2+j)*640))+1] = 200;
+				gl_depth_back[3*(i+((-2+j)*640))+2] = 200;
+			}
 		}
-	}
 
-	for (i = 0; i < 50; i++) {
-		for (j = deepest_pos-4; j < deepest_pos+5; j++) {
-			gl_depth_back[3*(j+((-25+i)*640))+0] = 200;
-                        gl_depth_back[3*(j+((-25+i)*640))+1] = 200;
-                        gl_depth_back[3*(j+((-25+i)*640))+2] = 200;
+		for (i = 0; i < 50; i++) {
+			for (j = deepest_pos-4; j < deepest_pos+5; j++) {
+				gl_depth_back[3*(j+((-25+i)*640))+0] = 200;
+	                        gl_depth_back[3*(j+((-25+i)*640))+1] = 200;
+	                        gl_depth_back[3*(j+((-25+i)*640))+2] = 200;
+			}
 		}
+
+		/*if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+	                printf("Socket screwed");
+	        }*/
+
+		memset(&addr, 0, sizeof(addr));
+		addr.sin_family = AF_INET;
+		addr.sin_addr.s_addr = inet_addr("192.168.1.2");
+		addr.sin_port=htons(25000);
+
+		sprintf(message, "%d,%d,%d", deepest_pos%640, (deepest_pos-(deepest_pos%640))/640, deepest);
+
+		/*if (sendto(fd, message, strlen(message), 0, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
+			printf("Sending failed");
+		}*/
+
 	}
-
-	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-                printf("Socket screwed");
-        }
-
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = inet_addr("192.168.1.2");
-	addr.sin_port=htons(25000);
-
-	sprintf(message, "%d,%d,%d", deepest_pos%640, (deepest_pos-(deepest_pos%640))/640, deepest);
-
-	if (sendto(fd, message, strlen(message), 0, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-		printf("Sending failed");
-	}
-
-	/*for (i = ((deepest_pos-(deepest_pos%640))/640)-10; i < ((deepest_pos-(deepest_pos%640))/640)+10; i++) {
-		gl_depth_back[3*i+0] = 0;
-                gl_depth_back[3*i+1] = 0;
-                gl_depth_back[3*i+2] = 0;
-	}*/
 
 	got_frames++;
 	pthread_cond_signal(&gl_frame_cond);
