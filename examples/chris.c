@@ -224,18 +224,29 @@ void *gl_threadfunc(void *arg)
 
 uint16_t t_gamma[2048];
 
-int getX(int i, int w, int h)
+int getX(int i)
 {
+   int w = 640;
+   int h = 480;
    return i % w;
 }
 
-int getY(int i, int w, int h)
+int getY(int i)
 {
+   int w = 640;
+   int h = 480;
    return (i - (i % w))/w;
 } 
 
 int furthest_permitted = 700;
 int closest_permitted = 400;
+int minimum_diff = 5;
+int maximum_diff = 50;
+int maximum_depth_diff = 10;
+int stored_point = 0;
+int stored_value = 0;
+int iterations = 0;
+int max_iterations = 25;
 
 void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 {
@@ -268,12 +279,33 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
                // have we found a length of units the right size
                if (c > boundary_size) {
                   if (
-                     pval < closest_value // closer than the previous value
-                     && pval < furthest_permitted // closer than global permissible maximum
-                     && pval > closest_permitted // outside the global permissible minimum
+                     pval < closest_value                               // closer than the previous value
+                     && pval < furthest_permitted                       // closer than global permissible maximum
+                     && pval > closest_permitted                        // outside the global permissible minimum
+                     && (stored_point == 0 ||
+                        ( getX(i) < getX(stored_point) + maximum_diff      // closer than maximum diff in X positive
+                        && getX(i) > getX(stored_point) - maximum_diff     // closer than maximum diff in X negative
+                        && getY(i) < getY(stored_point) + maximum_diff     // closer than maximum diff in Y positive
+                        && getY(i) > getY(stored_point) - maximum_diff     // closer than maximum diff in Y negative
+                        ))
                      ) {
-                     closest_point = i-((int) boundary_threshold/2);
-                     closest_value = pval;
+                        if (
+                           getX(i) > getX(stored_point) + minimum_diff     // further than minimum diff in X positive
+                           || getX(i) < getX(stored_point) - minimum_diff  // further than minimum diff in X negative
+                           || getY(i) > getY(stored_point) + minimum_diff  // further than minimum diff in Y positive
+                           || getY(i) < getY(stored_point) - minimum_diff  // further than minimum diff in Y negative
+                        ) {
+                           // exceeds minimum difference, therefore is a new point
+                           closest_point = i-((int) boundary_threshold/2);
+                        } else {
+                           // doesn't exceed minimum, revert back to the old point
+                           if (stored_point != 0) {
+                              closest_point = stored_point;
+                           } else {
+                              closest_point = i-((int) boundary_threshold/2);
+                           }
+                        }
+                        closest_value = pval;
                   }
                }
          } else {
@@ -327,7 +359,9 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
    }
 
    if (closest_point > 0) {
-
+      // reset the counter
+      iterations = 0;
+      // draw a cross
       for (i = closest_point-25; i < closest_point+25; i++) {
          for (j = 0; j < 4; j++) {
             if ((i+((-2+j))*640) < 0) {
@@ -349,7 +383,17 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
             gl_depth_back[3*(j+((-25+i)*640))+2] = 200;
          }
       }
+   
+      stored_point = closest_point;
+      stored_value = closest_value;
+   } else {
+      iterations++;
+   }
 
+   if (iterations > max_iterations) {
+      iterations = 0;
+      stored_point = 0;
+      stored_value = 0;
    }
 
    got_frames++;
