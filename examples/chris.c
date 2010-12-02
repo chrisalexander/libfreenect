@@ -259,8 +259,8 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
    int closest_value = 10000;
    int previous_point = 0;
    int previous_value = 0;
-   int boundary_threshold = 5;
-   int boundary_size = 20;
+   int boundary_threshold = 15;
+   int boundary_size = 10;
    int c = 0; // counter for finding objects
    int drawing_point = 0;
 
@@ -453,9 +453,44 @@ void *freenect_threadfunc(void *arg)
 
 void *udp_threadfunc(void *arg)
 {
+   printf("Socket thread\n");
+
+   // init network stuff
+   struct sockaddr_in addr;
+   int fd;
+   char message[100];
+   char buffer[5];
+   int errors = 0;
+   
+   // init the socket
+   if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+      printf("Unable to connect to socket");
+   }
+   
+   memset(&addr, 0, sizeof(addr));
+   addr.sin_family = AF_INET;
+   addr.sin_addr.s_addr = inet_addr("192.168.1.1");
+   addr.sin_port=htons(25000);
+   
    while(!die)
    {
-      
+      strcpy(message, "");
+      sprintf(buffer, "%d", getX(stored_point));
+      strcat(message, buffer);
+      strcat(message, " ");
+      sprintf(buffer, "%d", getY(stored_point));
+      strcat(message, buffer);
+      strcat(message, " ");
+      sprintf(buffer, "%d", stored_value);
+      strcat(message, buffer);
+      if (sendto(fd, message, strlen(message), 0, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
+         errors++;
+      }
+      if (errors > 15) {
+         printf("Socket failed, aborting\n");
+         break;
+      }
+      usleep(100000);
    }
    return NULL;
 }
@@ -504,11 +539,11 @@ int main(int argc, char **argv)
       return 1;
    }
    
-   //res2 = pthread_create(&udp_thread, NULL, udp_threadfunc, NULL);
-   /*if (res2) {
+   res2 = pthread_create(&udp_thread, NULL, udp_threadfunc, NULL);
+   if (res2) {
       printf("pthread_create for udp failed\n");
       return 1;
-   }*/
+   }
 
    // OS X requires GLUT to run on the main thread
    gl_threadfunc(NULL);
