@@ -53,6 +53,7 @@
 #include <math.h>
 
 pthread_t freenect_thread;
+pthread_t udp_thread;
 volatile int die = 0;
 
 int g_argc;
@@ -242,11 +243,10 @@ int furthest_permitted = 700;
 int closest_permitted = 400;
 int minimum_diff = 5;
 int maximum_diff = 50;
-int maximum_depth_diff = 10;
-int stored_point = 0;
-int stored_value = 0;
-int iterations = 0;
-int max_iterations = 25;
+int minimum_depth_diff = 5;
+int maximum_depth_diff = 300;
+int stored_point = (640*(480/2))+(640/2);
+int stored_value = 700;
 
 void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 {
@@ -254,6 +254,7 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
    int j;
    freenect_depth *depth = v_depth;
    
+   int cross_colour = 0;
    int closest_point = 0;
    int closest_value = 10000;
    int previous_point = 0;
@@ -261,6 +262,7 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
    int boundary_threshold = 5;
    int boundary_size = 20;
    int c = 0; // counter for finding objects
+   int drawing_point = 0;
 
    pthread_mutex_lock(&gl_backbuf_mutex);
    for (i=0; i<640*480; i++) {
@@ -272,8 +274,8 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
          // only check depth values after first 2000, they can be noisy
          
          // apply the boundary rules
-         if (pval < previous_value + boundary_threshold // less than boundary
-            && pval > previous_value - boundary_threshold // greater than boundary
+         if (pval < previous_value + boundary_threshold     // less than boundary
+            && pval > previous_value - boundary_threshold   // greater than boundary
             ) {
                c++;
                // have we found a length of units the right size
@@ -287,25 +289,32 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
                         && getX(i) > getX(stored_point) - maximum_diff     // closer than maximum diff in X negative
                         && getY(i) < getY(stored_point) + maximum_diff     // closer than maximum diff in Y positive
                         && getY(i) > getY(stored_point) - maximum_diff     // closer than maximum diff in Y negative
-                        ))
+                        && (stored_value == 0 ||
+                           (pval < stored_value + maximum_depth_diff       // closer than maximum diff in Z positive
+                           && pval > stored_value - minimum_depth_diff     // closer than maximum diff in Z negative
+                        ))))
                      ) {
                         if (
                            getX(i) > getX(stored_point) + minimum_diff     // further than minimum diff in X positive
                            || getX(i) < getX(stored_point) - minimum_diff  // further than minimum diff in X negative
                            || getY(i) > getY(stored_point) + minimum_diff  // further than minimum diff in Y positive
                            || getY(i) < getY(stored_point) - minimum_diff  // further than minimum diff in Y negative
+                           || pval > stored_value + minimum_depth_diff     // further than minimum diff in Z positive
+                           || pval < stored_value - minimum_depth_diff     // further than minimum diff in Z negative
                         ) {
                            // exceeds minimum difference, therefore is a new point
                            closest_point = i-((int) boundary_threshold/2);
+                           closest_value = pval;
                         } else {
                            // doesn't exceed minimum, revert back to the old point
                            if (stored_point != 0) {
                               closest_point = stored_point;
+                              closest_value = stored_value;
                            } else {
                               closest_point = i-((int) boundary_threshold/2);
+                              closest_value = pval;
                            }
                         }
-                        closest_value = pval;
                   }
                }
          } else {
@@ -359,41 +368,40 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
    }
 
    if (closest_point > 0) {
-      // reset the counter
-      iterations = 0;
+      drawing_point = closest_point;
+      stored_point = closest_point;
+      stored_value = closest_value;
+   } else {
+      drawing_point = stored_point;
+   }
+   
+   if (drawing_point > 0) {
+      cross_colour = stored_value-400;
+      if (cross_colour > 255) {
+         cross_colour = 255;
+      }
       // draw a cross
-      for (i = closest_point-25; i < closest_point+25; i++) {
+      for (i = drawing_point-25; i < drawing_point+25; i++) {
          for (j = 0; j < 4; j++) {
             if ((i+((-2+j))*640) < 0) {
                continue;
             }
-            gl_depth_back[3*(i+((-2+j)*640))+0] = 200;
-            gl_depth_back[3*(i+((-2+j)*640))+1] = 200;
-            gl_depth_back[3*(i+((-2+j)*640))+2] = 200;
-         }
-      }
-
-      for (i = 0; i < 50; i++) {
-         for (j = closest_point-4; j < closest_point+5; j++) {
-            if (j+((-25+i)*640) < 0) {
-               continue;
-            }
-            gl_depth_back[3*(j+((-25+i)*640))+0] = 200;
-            gl_depth_back[3*(j+((-25+i)*640))+1] = 200;
-            gl_depth_back[3*(j+((-25+i)*640))+2] = 200;
+            gl_depth_back[3*(i+((-2+j)*640))+0] = cross_colour;
+            gl_depth_back[3*(i+((-2+j)*640))+1] = cross_colour;
+            gl_depth_back[3*(i+((-2+j)*640))+2] = cross_colour;
          }
       }
    
-      stored_point = closest_point;
-      stored_value = closest_value;
-   } else {
-      iterations++;
-   }
-
-   if (iterations > max_iterations) {
-      iterations = 0;
-      stored_point = 0;
-      stored_value = 0;
+      for (i = 0; i < 50; i++) {
+         for (j = drawing_point-4; j < drawing_point+5; j++) {
+            if (j+((-25+i)*640) < 0) {
+               continue;
+            }
+            gl_depth_back[3*(j+((-25+i)*640))+0] = cross_colour;
+            gl_depth_back[3*(j+((-25+i)*640))+1] = cross_colour;
+            gl_depth_back[3*(j+((-25+i)*640))+2] = cross_colour;
+         }
+      }
    }
 
    got_frames++;
@@ -413,7 +421,7 @@ void rgb_cb(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp)
 void *freenect_threadfunc(void *arg)
 {
    freenect_set_tilt_degs(f_dev,freenect_angle);
-   freenect_set_led(f_dev,LED_RED);
+   freenect_set_led(f_dev,LED_GREEN);
    freenect_set_depth_callback(f_dev, depth_cb);
    freenect_set_rgb_callback(f_dev, rgb_cb);
    freenect_set_rgb_format(f_dev, FREENECT_FORMAT_RGB);
@@ -443,10 +451,18 @@ void *freenect_threadfunc(void *arg)
    return NULL;
 }
 
+void *udp_threadfunc(void *arg)
+{
+   while(!die)
+   {
+      
+   }
+   return NULL;
+}
 
 int main(int argc, char **argv)
 {
-   int res;
+   int res, res2;
 
    printf("Kinect camera test\n");
 
@@ -484,9 +500,15 @@ int main(int argc, char **argv)
 
    res = pthread_create(&freenect_thread, NULL, freenect_threadfunc, NULL);
    if (res) {
-      printf("pthread_create failed\n");
+      printf("pthread_create for freenect failed\n");
       return 1;
    }
+   
+   //res2 = pthread_create(&udp_thread, NULL, udp_threadfunc, NULL);
+   /*if (res2) {
+      printf("pthread_create for udp failed\n");
+      return 1;
+   }*/
 
    // OS X requires GLUT to run on the main thread
    gl_threadfunc(NULL);
