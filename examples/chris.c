@@ -229,7 +229,7 @@ int getX(int i)
 {
    int w = 640;
    int h = 480;
-   return i % w;
+   return (w - i % w);
 }
 
 int getY(int i)
@@ -245,7 +245,7 @@ int minimum_diff = 5;
 int maximum_diff = 50;
 int minimum_depth_diff = 5;
 int maximum_depth_diff = 300;
-int stored_point = (640*(480/2))+(640/2);
+int stored_point = (640*480)-(640/2);
 int stored_value = 700;
 
 void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
@@ -471,16 +471,16 @@ void *udp_threadfunc(void *arg)
    addr.sin_family = AF_INET;
    addr.sin_addr.s_addr = inet_addr("192.168.1.1");
    addr.sin_port=htons(25000);
-   
+   printf("Starting");
    while(!die)
    {
       strcpy(message, "");
       sprintf(buffer, "%d", getX(stored_point));
       strcat(message, buffer);
-      strcat(message, " ");
+      strcat(message, ",");
       sprintf(buffer, "%d", getY(stored_point));
       strcat(message, buffer);
-      strcat(message, " ");
+      strcat(message, ",");
       sprintf(buffer, "%d", stored_value);
       strcat(message, buffer);
       if (sendto(fd, message, strlen(message), 0, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
